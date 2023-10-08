@@ -1,0 +1,52 @@
+---
+title: "Probability Distributions Explained Code"
+author: "Very Normal Guy"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+set.seed(1)
+```
+
+```{r}
+# Simulating a single experiment and statistic
+
+# A single double dice roll
+double_dice = runif(2, min = 1, max = 6) %>% ceiling
+
+# 70 double dice roll sums in an average Catan game
+catan_rolls = map_dbl(1:70, function(i) {
+  runif(2, min = 1, max = 6) %>% ceiling %>% sum
+})
+
+# Calculate the number of 8s across the entire game
+(count_8s = sum(catan_rolls == 8))
+```
+
+```{r}
+# Repeating that experiment 1000 times 
+count_8_distribution = map_dbl(1:10000, function(i) {
+  
+  catan_rolls = map_dbl(1:70, function(i) {
+    runif(2, min = 1, max = 6) %>% ceiling %>% sum
+  })
+  
+  sum(catan_rolls == 8)
+
+})
+```
+
+```{r}
+# Plot the histogram (estimated PMF)
+tibble( count8 = count_8_distribution ) %>% 
+  ggplot(aes(x = count8)) +
+  geom_histogram(bins = 40, color = "white", fill = "black") +
+  theme_minimal()
+```
+
+```{r}
+# Average number of 8s across an average Catan game
+(mean(count_8_distribution))
+```
+
