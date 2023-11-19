@@ -1,0 +1,219 @@
+---
+title: "Central Limit Theorem Demo"
+author: "Very Normal Guy"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(gganimate)
+```
+
+```{r}
+# Simulation parameters
+sample_size = 100
+num_iterations = 1000
+
+# IID dataset of standard normals
+(data = runif(sample_size, min = 0, max = 1))
+
+# Single sample mean
+(xbar = mean(data))
+
+# Get the distribution of many sample means
+sims = tibble(
+  rep = 1:num_iterations,
+  xbar = map_dbl(rep, function(i) {
+    
+    data = runif(sample_size, min = 0, max = 1)
+    mean(data)
+  })
+)
+sims
+```
+
+```{r}
+# Constructing the gif
+gifdata = tibble()
+for (iter in 1:num_iterations) {
+  gifdata = bind_rows(gifdata, sims %>% filter(rep <= iter) %>% mutate(frame = iter))
+}
+
+ex = 0.5
+varx = (1/12) / sample_size
+
+pdf = tibble(
+  x = seq(ex - 3*sqrt(varx), ex + 3*sqrt(varx), 0.01),
+  px = dnorm(x, mean = ex, sd = sqrt(varx))
+)
+
+ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata %>% filter(frame == 1000), bins = 50, fill = "#FFBF00", color = "#002851") +
+  geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) +
+  ylim(0, 20) 
+
+unifclt = ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata, bins = 50, fill = "#FFBF00", color = "#002851") +
+  geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) + 
+  ylim(0, 20) +
+  transition_states(states = frame)
+
+animate(unifclt, nframes = num_iterations)
+anim_save("unif-clt.gif")
+```
+
+```{r}
+# Binomial data
+sims = tibble(
+  rep = 1:num_iterations,
+  xbar = map_dbl(rep, function(i) {
+    
+    data = rbinom(sample_size, size = 20, prob = 0.5)
+    mean(data)
+  })
+)
+
+gifdata = tibble()
+for (iter in 1:num_iterations) {
+  gifdata = bind_rows(gifdata, sims %>% filter(rep <= iter) %>% mutate(frame = iter))
+}
+
+ex = 10
+varx = 5 / sample_size
+
+pdf = tibble(
+  x = seq(ex - 3*sqrt(varx), ex + 3*sqrt(varx), 0.01),
+  px = dnorm(x, mean = ex, sd = sqrt(varx))
+)
+
+ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata %>% filter(frame == 1000), bins = 50, fill = "#FFBF00", color = "#002851") +
+  geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) +
+  ylim(0, 2.5)
+
+binomclt = ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata, bins = 50, fill = "#FFBF00", color = "#002851") +
+  geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) + 
+  ylim(0, 2.5) +
+  transition_states(states = frame)
+
+animate(binomclt, nframes = num_iterations)
+anim_save("binom-clt.gif")
+```
+
+```{r}
+# Poisson data
+sims = tibble(
+  rep = 1:num_iterations,
+  xbar = map_dbl(rep, function(i) {
+    
+    data = rpois(sample_size, lambda = 4)
+    mean(data)
+  })
+)
+
+gifdata = tibble()
+for (iter in 1:1000) {
+  gifdata = bind_rows(gifdata, sims %>% filter(rep <= iter) %>% mutate(frame = iter))
+}
+
+ex = 4
+varx = 4 / sample_size
+
+pdf = tibble(
+  x = seq(ex - 3*sqrt(varx), ex + 3*sqrt(varx), 0.01),
+  px = dnorm(x, mean = ex, sd = sqrt(varx))
+)
+
+ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata %>% filter(frame == 1000), bins = 50, fill = "#FFBF00", color = "#002851") +
+  geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) +
+  ylim(0, 2.5) 
+
+poisclt = ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata, bins = 50, fill = "#FFBF00", color = "#002851") +
+  geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) + 
+  ylim(0, 2.5) +
+  transition_states(states = frame)
+
+animate(poisclt, nframes = num_iterations)
+anim_save("pois-clt.gif")
+```
+
+
+```{r}
+# Poisson data
+sims = tibble(
+  rep = 1:num_iterations,
+  xbar = map_dbl(rep, function(i) {
+    
+    data = rcauchy(sample_size, location = 0, scale = 1)
+    mean(data)
+  })
+)
+
+gifdata = tibble()
+for (iter in 1:1000) {
+  gifdata = bind_rows(gifdata, sims %>% filter(rep <= iter) %>% mutate(frame = iter))
+}
+
+ex = 0
+varx = 1
+
+pdf = tibble(
+  x = seq(ex - 3*sqrt(varx), ex + 3*sqrt(varx), 0.01),
+  px = dnorm(x, mean = ex, sd = sqrt(varx))
+)
+
+ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata %>% filter(frame == 1000), bins = 50, fill = "#FFBF00", color = "#002851") +
+  #geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) 
+
+cauchyclt = ggplot() +
+  geom_histogram(aes(x = xbar, y = ..density..), data = gifdata, bins = 50, fill = "#FFBF00", color = "#002851") +
+  # geom_line(aes(x = x, y = px), color = "red", data = pdf) +
+  theme_minimal() +
+  labs(
+    x = "x",
+    y = "f(x)"
+  ) +
+  transition_states(states = frame)
+
+animate(cauchyclt, nframes = num_iterations)
+anim_save("cauchy-clt.gif")
+```
