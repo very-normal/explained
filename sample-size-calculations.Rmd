@@ -1,0 +1,127 @@
+---
+title: "Code for 'An easier way to do sample size calculations'"
+author: "Very Normal"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(foreach)
+set.seed(2)
+```
+
+```{r}
+# Simulation 1: Estimating type-I error for a two-sample t-test at a 5% level
+n = 30
+
+sims = foreach(i = 1:10000, .combine = c) %do% {
+  
+  # Simulating data where the null hypothesis is true 
+  # aka no difference in population means
+  placebo = rnorm(n, mean = 0, sd = 1)
+  treatment = rnorm(n, mean = 0, sd = 1)
+  
+  # Run the hypothesis test with a 5% level
+  test = t.test(placebo, treatment, conf.level = 0.95)
+  
+  # Check if null was rejected
+  # aka is the value for the null hypothesis in the CI?
+  result = (!between(0, test$conf.int[1], test$conf.int[2])) %>%
+              as.integer()
+}
+
+# Calculate the sample average of the simulations 
+mean(sims)
+```
+
+```{r}
+# Simulation 2: Estimating power for an effect size of 0.5 at 30 per group
+n = 30
+
+sims = foreach(i = 1:10000, .combine = c) %do% {
+  
+  # Simulating data where the alternative hypothesis is true 
+  # and the true difference is 0.5
+  placebo = rnorm(n, mean = 0, sd = 1)
+  treatment = rnorm(n, mean = 0.5, sd = 1)
+  
+  # Run the hypothesis test with a 5% level
+  test = t.test(placebo, treatment, conf.level = 0.95)
+  
+  # Check if null was rejected
+  # aka is the value for the null hypothesis in the CI?
+  result = (!between(0, test$conf.int[1], test$conf.int[2])) %>%
+              as.integer()
+}
+
+# Calculate the sample average of the simulations 
+mean(sims)
+```
+
+```{r}
+# Simulation 3: Sample size calculation for 80% power
+for (n in 2:100) {
+  
+  sims = foreach(i = 1:10000, .combine = c) %do% {
+    
+    # Simulating data where the alternative hypothesis is true 
+    # and the true difference is 0.5
+    placebo = rnorm(n, mean = 0, sd = 1)
+    treatment = rnorm(n, mean = 0.5, sd = 1)
+    
+    # Run the hypothesis test with a 5% level
+    test = t.test(placebo, treatment, conf.level = 0.95)
+    
+    # Check if null was rejected
+    # aka is the value for the null hypothesis in the CI?
+    result = (!between(0, test$conf.int[1], test$conf.int[2])) %>%
+      as.integer()
+  }
+  
+  # Calculate the sample average of the simulations 
+  power = mean(sims)
+   
+  # Stop if we've acheived 80% power
+  if (power > 0.8)
+    break
+}
+```
+
+```{r}
+# Code 4: Double checking the calculation with a different library
+library(pwr)
+
+# This function is for the t-tests
+pwr.t.test(d = 0.5, 
+           sig.level = 0.05, 
+           power = 0.8, 
+           type = "two.sample", 
+           alternative = "two.sided")
+```
+
+```{r}
+# Simulation 4: Substituting Mann-Whitney-Wilcoxon test
+for (n in 2:100) {
+  
+  sims = foreach(i = 1:10000, .combine = c) %do% {
+    
+    # Simulating data where the alternative hypothesis is true 
+    # and the true difference is 0.5
+    placebo = rnorm(n, mean = 0, sd = 1)
+    treatment = rnorm(n, mean = 0.5, sd = 1)
+    
+    # Run the hypothesis test with a 5% level
+    test = t.test(placebo, treatment, conf.level = 0.95)
+    
+    # Check if null was rejected
+    result = test$p.value < 0.05
+  }
+  
+  # Calculate the sample average of the simulations 
+  power = mean(sims)
+   
+  # Stop if we've acheived 80% power
+  if (power > 0.8)
+    break
+}
+```
