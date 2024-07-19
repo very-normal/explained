@@ -1,0 +1,271 @@
+---
+title: "Metropolis"
+author: "Very Normal"
+date: "2024-07-15"
+output: html_document
+---
+ 
+Code has been adapted from a lecture by Richard Li of the University of Washington https://faculty.washington.edu/jonno/PAA-SAE/PAA-2018-R-Bayes-2.pdf
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+ 
+```{r}
+# Data from last 10 YouTube videos, as of July 14th 2024
+likes = c(586, 1280, 293, 588, 1099, 1384, 890, 8374, 653, 3445)
+views = c(8282, 27277, 5421, 7978, 18916, 20830, 15329, 183125, 11056, 73214)
+(liketoview = likes / views)
+```
+
+# The Model 
+
+The data are modeled as coming from a Binomial distribution, where each video has its own success rate:
+
+$$
+Y_i \mid p_i \sim \text{Bin}(n_i, p_i) = {n_i \choose y_i}p_i^{y_i}(1 - p_i)^{n_i - y_i}
+$$
+
+where $n_i$ is the total number of views on video $i$ and $p_i$ is the probability that a viewer likes the video.
+
+Each video's probability of a like is assumed to come from a Beta distribution:
+
+$$
+p_i \mid \alpha, \beta \sim \text{Beta}(\alpha, \beta) = \frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)}p_i^{\alpha-1}(1 - p_i)^{\beta-1}
+$$ 
+
+where $\alpha$ is the prior number of successes and $\beta$ is the prior number of failures. 
+
+For this model, I use the prior distribution recommended by Gelman: 
+
+$$2
+P(\alpha, \beta) \propto (\alpha + \beta)^{-5/2}
+$$
+ 
+Hence, the posterior distribution of the parameters is given by:
+
+$$
+P(\alpha, \beta, \mathbf{p_i} \mid y_i) \propto 
+\underbrace{(\alpha + \beta)^{-5/2}}_{\text{Hyperprior}} \, \cdot \, \prod^{10}_{i=1} \left[
+\underbrace{\frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)}p_i^{\alpha-1}(1 - p_i)^{\beta-1}}_{\text{Prior}}  \, \cdot \, 
+\underbrace{{n_i \choose y_i}p_i^{y_i}(1 - p_i)^{n_i - y_i}}_{\text{Likelihood}} \right]
+$$ 
+
+Due to the nature of how small these numbers can become, it's easier to work implement the Metropolis algoirthm with the *log* of the posterior distribution. Thankfully, using the log-posterior instead of the regular posterior doesn't affect our calculation.
+
+# The Code
+
+For simplicity, I'll write the expression for the log-posterior distribution in its own function.
+
+```{r}
+log_posterior = function(ns, ys, ps, alpha, beta) {
+  
+  # log-hyperprior
+  lhprior = (-5/2) * log(alpha + beta)
+  
+  # log-priors for each video
+  lpriors = (lgamma(alpha + beta) - lgamma(alpha) - lgamma(beta)) +
+    (alpha - 1) * log(ps) + 
+    (beta - 1) * log(1 - ps)
+  
+  # log-likelihoods
+  loglik = dbinom(ys, size = ns, prob = ps, log = T) # Note the log argument
+  
+  return(lhprior + sum(lpriors) + sum(loglik))
+  
+}
+```
+
+For my proposal distribution for $\alpha, \beta$, I'm going to use an independent uniform distribution centered on the current value, with a half-width of 0.1. Since this can potentially lead to negative $\alpha, \beta$, I'll retry the proposal until both are positive
+
+```{r}
+# Propose a new alpha and beta parameter based on a uniform distribution
+get_proposal = function(alpha, beta, h) {
+  
+  new_alpha = new_beta = -1
+  
+  while (new_alpha < 0 || new_beta < 0) {
+    
+    new_alpha = runif(1, min = alpha - h, max = alpha + h)
+    new_beta = runif(1, min = beta - h, max = beta + h)
+  
+  }
+  
+  return(c(new_alpha, new_beta))
+  
+}
+```
+
+From here, we can implement the Metropolis algorithm:
+
+```{r}
+S = 4000
+n = length(likes)
+
+# Initialize parameters
+alpha = 25
+beta = 500
+ps = rbeta(n, alpha + likes, beta + views- likes)
+names(ps)
+
+# Storing results of algorithm
+params = data.frame()
+params = rbind(params, c(FALSE, 1, alpha, beta, ps))
+colnames(params) = c("reject", "iter", "alpha", "beta", paste0("p", 1:10))
+
+for (iter in 2:S) {
+  
+  # Generate new alpha, beta and video response rates
+  proposal = get_proposal(alpha, beta, hw = 5)
+  new_alpha = proposal[1]
+  new_beta = proposal[2]
+  new_ps = rbeta(n, new_alpha + likes, new_beta + views - likes)
+  
+  # Calculate acceptance function
+  accept_ratio = log_posterior(ns = views, ys = likes, ps = new_ps, alpha = new_alpha, beta = new_beta) / 
+    log_posterior(ns = views, ys = likes, ps = ps, alpha = alpha, beta = beta)
+  accept_prob = min(1, accept_ratio)
+  
+  # Accept-reject: 
+  u = runif(1, 0, 1)
+  if (u <= accept_prob) {
+    
+    alpha = new_alpha 
+    beta = new_beta
+    ps = new_ps
+    params = rbind(params, c(FALSE, iter, alpha, beta, ps))
+    
+  } else {
+    params = rbind(params, c(TRUE, iter, alpha, beta, ps))
+  }
+  
+}
+
+params |> 
+  pivot_longer(alpha:p10, names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = iter, y = value, color = parameter)) +
+  geom_line() +
+  facet_wrap(~parameter, scale = "free") + 
+  theme_minimal() +
+  theme(legend.position = "none") +
+  theme(
+    panel.background = element_rect(fill='transparent'),
+    plot.background = element_rect(fill='transparent', color=NA),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.background = element_rect(fill='transparent'),
+    legend.box.background = element_rect(fill='transparent')
+  )
+```
+ 
+# Results
+
+The proposal distribution that Metropolis used does NOT work out for this problem. A lecture I saw updates alpha and beta separately, and it seemingly worked, but I wanted to stay true to the Metropolis paper.
+
+```{r}
+params |> 
+  summarize(prob_reject = mean(reject))
+
+params |> 
+  pivot_longer(alpha:p10, names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = iter, y = value, color = parameter)) +
+  geom_line() +
+  facet_wrap(~parameter, scale = "free") +
+  theme(legend.position = "none")
+```
+
+# Plan B: Stan
+
+After going for it for so long, I couldn't not follow through with the analysis. So I used another tool that I knew could tackle the problem: Stan.
+
+```{r}
+library(rstan)
+
+data = list(
+  N = length(likes),
+  n = views, 
+  y = likes
+)
+
+model = '
+  // The input data is a vector y of length N
+  // Stan code graciously taken from https://bookdown.org/eugenesun95/544Notes/hierarchical-model.html
+  data {
+    int<lower=0> N;
+    int<lower=0> n [N];
+    int<lower=0> y [N];
+  }
+  
+  parameters {
+    real<lower=0> alpha;
+    real<lower=0> beta;
+    real<lower=0, upper=1> p[N];
+  }
+  
+  model {
+    target += -5 * log(alpha+beta) / 2; # Hyperprior (due to Gelman)
+    p ~ beta(alpha, beta);              # Prior
+    y ~ binomial(n, p);                 # Likelihood
+  }
+'
+
+fit = stan(model_code = model, data = data)
+```
+
+Withthe posterior samples generated, we can check them for diagnostics and then analyze the posterior distribution of the Beta 
+
+```{r}
+samples = as.data.frame(fit) |> 
+  as_tibble() |> 
+  mutate( iter = 1:4000)
+
+samples |> 
+  pivot_longer(alpha:`p[10]`, names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = iter, y = value, color = parameter)) +
+  geom_line() + 
+  facet_wrap(~parameter, scale = "free") +
+  theme_minimal() + 
+  theme(legend.position = "none") +
+  theme(
+    panel.background = element_rect(fill='transparent'),
+    plot.background = element_rect(fill='transparent', color=NA),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.background = element_rect(fill='transparent'),
+    legend.box.background = element_rect(fill='transparent')
+  )
+
+ggsave("posterior-mean.png", bg="transparent", units = "px", width = 3840, height = 2160, dpi = "retina")
+
+
+samples |> 
+  mutate(pmean = alpha / (alpha + beta)) |> 
+  ggplot(aes(x = pmean)) +
+  geom_histogram(aes(y=..density..),color=  "black", fill = "#FFBF00") + 
+  geom_vline(aes(xintercept = 0.0584), color = "#6FCFEB", linewidth = 1) +
+  geom_vline(aes(xintercept = 0.0669), color = "#0047BA", linewidth = 1) +
+  geom_vline(aes(xintercept = 0.0516), color = "#0047BA", linewidth = 1) +
+  theme_minimal() + 
+  theme(legend.position = "none") +
+  theme(
+    panel.background = element_rect(fill='transparent'),
+    plot.background = element_rect(fill='transparent', color=NA),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.background = element_rect(fill='transparent'),
+    legend.box.background = element_rect(fill='transparent')
+  ) +
+  labs(
+    x = "Posterior Mean",
+    y = "P(Mean | Data)"
+  )
+
+postmean = samples |> 
+  transmute(
+    mu = alpha / (alpha + beta)
+  ) |> 
+  pull(mu)
+
+(mean(postmean)) # Posterior mean of level 1 Beta distribution
+quantile(postmean, c(0.025, 0.975)) # 95% Credible interval on posterior mean
+```
