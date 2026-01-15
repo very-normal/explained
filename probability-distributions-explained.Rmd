@@ -11,11 +11,11 @@ set.seed(1) # reproducibility
 
 ```{r}
 # A single double dice roll
-double_dice = runif(2, min = 1, max = 6) %>% ceiling
+double_dice = sum(sample(1:6, 2, replace = TRUE))
 
 # 70 double dice roll sums in an average Catan game
 catan_rolls = map_dbl(1:70, function(i) {
-  runif(2, min = 1, max = 6) %>% ceiling %>% sum
+  sum(sample(1:6, 2, replace = TRUE))
 })
 
 (count_8s = sum(catan_rolls == 8))
@@ -26,7 +26,7 @@ catan_rolls = map_dbl(1:70, function(i) {
 count_8_distribution = map_dbl(1:10000, function(i) {
   
   catan_rolls = map_dbl(1:70, function(i) {
-    runif(2, min = 1, max = 6) %>% ceiling %>% sum
+    sum(sample(1:6, 2, replace = TRUE))
   })
   
   sum(catan_rolls == 8)
